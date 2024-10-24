@@ -27,9 +27,9 @@ const path = require('path');
 // });
 
 const s3 = new aws.S3({
-  endpoint: 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com',
-  accessKeyId: 'u730c4e6d470', // Your Clever Cloud user ID
-  secretAccessKey: 'BdBI423IbEyi9eEj', // Your Clever Cloud password
+  endpoint: process.env.AWS_S3_ENDPOINT,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   s3ForcePathStyle: true,
   signatureVersion: 'v4',
 });
@@ -80,11 +80,12 @@ const getTopCategories = async (req, res) => {
       FROM products 
       GROUP BY category
     `);
+    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     const subcategory = rows.map(row => ({
       name: row.category,
       count: row.count,
-      image: row.image, // Image is already the S3 URL
+      image: baseUrl + row.image, // Construct the full URL // Image is already the S3 URL
       category_id: row.category_id
     }));
 
@@ -112,11 +113,13 @@ const getProductsbySelectedCategory = async (req, res) => {
 
     // Querying products with or without filtering by category
     const [products] = await pool.query(query, queryParams);
+    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     // Format the image paths for each product
     const formattedProducts = products.map(product => ({
+      
       ...product,
-      image: product.image // Assuming the image is an S3 URL directly
+      image: baseUrl + product.image // Assuming the image is an S3 URL directly
 
 
     }));
@@ -204,12 +207,13 @@ const getProduct = async (req, res) => {
       ORDER BY (originalAmount - discountAmount) DESC 
       LIMIT 6
     `);
+    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     // Format the image URLs similar to how it's done in getTopCategories
     const formatProductImages = (products) => {
       return products.map(product => ({
         ...product,
-        image: product.image // Use the S3 URL directly
+        image: baseUrl + product.image // Use the S3 URL directly
       }));
     };
 
