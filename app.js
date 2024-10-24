@@ -26,7 +26,11 @@ app.use(express.json()); // Parse JSON request bodies
 app.use('/api/products', productRoutes);
 app.use('/api/users', loginRoutes);
 
+<<<<<<< HEAD
 const PORT = process.env.PORT || 3306;
+=======
+const PORT = process.env.PORT || 10000;
+>>>>>>> 785302286ae66353e24358531538beaee3bc2cc6
 
 app.post('/create-order', async (req, res) => {
   const { amount, currency } = req.body; // You can pass the amount and currency from frontend
