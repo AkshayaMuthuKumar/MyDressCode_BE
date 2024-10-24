@@ -12,7 +12,6 @@ const path = require('path');
 const cors = require('cors');
 
 const app = express();
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const razorpay = new Razorpay({
   key_id: 'rzp_test_OK03rE3KWdrU3p',
