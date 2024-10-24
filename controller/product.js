@@ -84,7 +84,7 @@ const getTopCategories = async (req, res) => {
     const subcategory = rows.map(row => ({
       name: row.category,
       count: row.count,
-      image: `${req.protocol}://${req.get('host')}/${row.image.replace(/\\/g, '/')}`, // Correct the image path format
+      image: row.image, // Image is already the S3 URL
       category_id: row.category_id
     }));
 
@@ -116,7 +116,7 @@ const getProductsbySelectedCategory = async (req, res) => {
     // Format the image paths for each product
     const formattedProducts = products.map(product => ({
       ...product,
-      image: `${req.protocol}://${req.get('host')}/uploads/${product.image.replace(/\\/g, '/')}` // Assuming your images are stored in the 'uploads' folder on your backend
+      image: product.image // Assuming the image is an S3 URL directly
 
 
     }));
@@ -209,7 +209,7 @@ const getProduct = async (req, res) => {
     const formatProductImages = (products) => {
       return products.map(product => ({
         ...product,
-        image: `${req.protocol}://${req.get('host')}/${product.image.replace(/\\/g, '/')}` // Correct the image path format
+        image: product.image // Use the S3 URL directly
       }));
     };
 
