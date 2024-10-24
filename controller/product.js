@@ -202,16 +202,25 @@ const getProductsbySelectedCategory = async (req, res) => {
     // Querying products with or without filtering by category
     const [products] = await pool.query(query, queryParams);
 
-    // Send the filtered products as a response
+    // Format the image paths for each product
+    const formattedProducts = products.map(product => ({
+      ...product,
+      image: `${req.protocol}://${req.get('host')}/uploads/${product.image.replace(/\\/g, '/')}` // Assuming your images are stored in the 'uploads' folder on your backend
+
+
+    }));
+
+    // Send the filtered products with formatted image paths as a response
     res.status(200).json({
       message: 'Products fetched successfully',
-      data: products,
+      data: formattedProducts,
     });
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ message: 'Error fetching products' });
   }
 };
+
 
 const getUniqueFilters = async (req, res) => {
   try {
@@ -277,16 +286,21 @@ const getProductById = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    // Format the image path
+    const product = result[0];
+    product.image = `${req.protocol}://${req.get('host')}/${product.image.replace(/\\/g, '/')}`;
+
     // Send the product details as a response
     res.status(200).json({
       message: 'Product fetched successfully',
-      data: result[0], // Send the first product found
+      data: product, // Send the first product found with the formatted image
     });
   } catch (error) {
     console.error('Error fetching product:', error);
     res.status(500).json({ message: 'Error fetching product' });
   }
 };
+
 
 const getProduct = async (req, res) => {
   try {

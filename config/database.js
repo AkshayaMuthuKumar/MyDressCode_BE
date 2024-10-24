@@ -1,6 +1,14 @@
 const mysql = require('mysql2/promise');
 //Oct15
 // Create a connection pool with mysql2
+// const db = mysql.createPool({
+//   host: 'localhost',
+//   user: 'root',
+//   password: 'akshaya1907*', // Replace with your MySQL password
+//   database: 'dress_shop',
+//   waitForConnections: true,
+// });
+
 const db = mysql.createPool({
   host: 'bjitio8jkqvxjg22yx2o-mysql.services.clever-cloud.com',
   user: 'uen6fxfvuac2fdee',
