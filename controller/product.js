@@ -1,5 +1,7 @@
 const { pool } = require('../config/database'); // Adjust the path as needed
-//Oct15
+const aws = require('aws-sdk');
+const multerS3 = require('multer-s3');
+const multer = require('multer');
 
 const generateCategoryId = async () => {
   const [rows] = await pool.query('SELECT COUNT(*) AS count FROM categories');
@@ -13,129 +15,38 @@ const generateProductId = async () => {
   return `MDC${String(count).padStart(2, '0')}`; // Generate ID like CAT01, CAT02, etc.
 };
 
-const multer = require('multer');
 const path = require('path');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads'); // Directory where files will be saved
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Unique file name
-  },
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'uploads'); // Directory where files will be saved
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, Date.now() + path.extname(file.originalname)); // Unique file name
+//   },
+// });
+
+const s3 = new aws.S3({
+  endpoint: 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com',
+  accessKeyId: 'u730c4e6d470', // Your Clever Cloud user ID
+  secretAccessKey: 'BdBI423IbEyi9eEj', // Your Clever Cloud password
+  s3ForcePathStyle: true,
+  signatureVersion: 'v4',
 });
-console.log("storage", storage)
-const upload = multer({ storage });
 
-const addCategory = async (req, res) => {
-  try {
-    const { category, subcategory, discount } = req.body;
-    if (!category || !subcategory) {
-      return res.status(400).json({ message: 'Category and subcategory are required' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ message: 'Image file is required' });
-    }
-
-    const image = req.file.path;
-
-    const categoryId = await generateCategoryId();
-    const discountValue = discount === '' || discount === undefined ? null : discount;
-    const sql = `
-          INSERT INTO categories (category_id, category, subcategory, discount, image)
-          VALUES (?, ?, ?, ?, ?)
-      `;
-    const [result] = await pool.query(sql, [categoryId, category, subcategory, discountValue, image]);
-
-    res.status(201).json({ message: 'Category added successfully', categoryId });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error adding category' });
-  }
-};
-
-const getCategory = async (req, res) => {
-  try {
-    // Fetch distinct categories
-    const [categoriesResult] = await pool.query('SELECT DISTINCT category FROM categories');
-    const categories = categoriesResult.map(row => row.category);
-
-    // Fetch distinct subcategories
-    const [subcategoriesResult] = await pool.query('SELECT DISTINCT subcategory FROM categories');
-    const subcategories = subcategoriesResult.map(row => row.subcategory);
-
-    // Return the result in a JSON response
-    res.json({
-      categories,
-      subcategories
-    });
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ message: 'Server error while fetching categories' });
-  }
-};
-
-const addProduct = async (req, res) => {
-  const {
-    name,
-    subcategory,
-    categoryId, // categoryId from the request body
-    size,
-    brand,
-    originalAmount,
-    discountAmount,
-    stock,
-    description
-  } = req.body;
-
-  // Check if file is uploaded
-  if (!req.file) {
-    return res.status(400).json({ message: 'Image file is required' });
-  }
-
-  const image = req.file.path; // Get the image path from the file object
-  const productId = await generateProductId();
-
-
-  try {
-    // Step 1: Fetch the category name from the categories table using the provided categoryId
-    const [categoryRow] = await pool.query(`
-          SELECT category FROM categories WHERE category_id = ?
-      `, [categoryId]);
-    if (categoryRow.length === 0) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-
-    const categoryName = categoryRow[0].category; // Get the category name
-
-    // Step 2: Insert the product into the products table
-    const sql = `
-          INSERT INTO products (category_id, product_id, category, name, subcategory, size, brand, image, originalAmount, discountAmount, stock, description)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-
-    const [result] = await pool.query(sql, [
-      categoryId,          // foreign key categoryId
-      productId,
-      categoryName,          // category name fetched from categories table
-      name,                  // product name
-      subcategory,           // subcategory of the product
-      size,                  // size of the product
-      brand,                 // brand of the product
-      image,                 // image path
-      originalAmount,        // original price
-      discountAmount ? discountAmount : null, // discount price (can be null)
-      stock,
-      description
-    ]);
-
-    res.status(201).json({ message: 'Product added successfully!', productId: result.insertId });
-  } catch (error) {
-    console.error('Error adding product:', error);
-    res.status(500).json({ message: 'Error adding product', error });
-  }
-};
-
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com',
+    acl: 'public-read', // Set the access control for the uploaded file
+    metadata: function (req, file, cb) {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: function (req, file, cb) {
+      cb(null, Date.now().toString() + path.extname(file.originalname)); // Unique file name
+    },
+  }),
+});
 
 const getCategoryIdBySubcategory = async (req, res) => {
   const { subcategory } = req.query;
@@ -274,34 +185,6 @@ const getUniqueFilters = async (req, res) => {
   }
 };
 
-const getProductById = async (req, res) => {
-  const { productId } = req.params; // Extract productId from the request parameters
-
-  try {
-    // Query to fetch product details by productId
-    const [result] = await pool.query('SELECT * FROM products WHERE product_id = ?', [productId]);
-
-    // Check if the product exists
-    if (result.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    // Format the image path
-    const product = result[0];
-    product.image = `${req.protocol}://${req.get('host')}/${product.image.replace(/\\/g, '/')}`;
-
-    // Send the product details as a response
-    res.status(200).json({
-      message: 'Product fetched successfully',
-      data: product, // Send the first product found with the formatted image
-    });
-  } catch (error) {
-    console.error('Error fetching product:', error);
-    res.status(500).json({ message: 'Error fetching product' });
-  }
-};
-
-
 const getProduct = async (req, res) => {
   try {
     // Fetch recent products including their images
@@ -426,6 +309,101 @@ const getJustArrivedProducts = async (req, res) => {
   }
 };
 
+const addCategory = async (req, res) => {
+  try {
+    const { category, subcategory, discount } = req.body;
+    if (!category || !subcategory) {
+      return res.status(400).json({ message: 'Category and subcategory are required' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: 'Image file is required' });
+    }
+
+    const image = req.file.location; // S3 image URL
+    const categoryId = await generateCategoryId();
+    const discountValue = discount ? discount : null;
+    
+    const sql = `
+      INSERT INTO categories (category_id, category, subcategory, discount, image)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    await pool.query(sql, [categoryId, category, subcategory, discountValue, image]);
+
+    res.status(201).json({ message: 'Category added successfully', categoryId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error adding category' });
+  }
+};
+
+// Get distinct categories and subcategories
+const getCategory = async (req, res) => {
+  try {
+    const [categoriesResult] = await pool.query('SELECT DISTINCT category FROM categories');
+    const categories = categoriesResult.map(row => row.category);
+
+    const [subcategoriesResult] = await pool.query('SELECT DISTINCT subcategory FROM categories');
+    const subcategories = subcategoriesResult.map(row => row.subcategory);
+
+    res.json({ categories, subcategories });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ message: 'Server error while fetching categories' });
+  }
+};
+
+// Add a new product
+const addProduct = async (req, res) => {
+  const { name, subcategory, categoryId, size, brand, originalAmount, discountAmount, stock, description } = req.body;
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'Image file is required' });
+  }
+
+  const image = req.file.location; // S3 image URL
+  const productId = await generateProductId();
+
+  try {
+    const [categoryRow] = await pool.query('SELECT category FROM categories WHERE category_id = ?', [categoryId]);
+    if (categoryRow.length === 0) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    const categoryName = categoryRow[0].category;
+
+    const sql = `
+      INSERT INTO products (category_id, product_id, category, name, subcategory, size, brand, image, originalAmount, discountAmount, stock, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    await pool.query(sql, [
+      categoryId, productId, categoryName, name, subcategory, size, brand, image, originalAmount, discountAmount ? discountAmount : null, stock, description
+    ]);
+
+    res.status(201).json({ message: 'Product added successfully!', productId });
+  } catch (error) {
+    console.error('Error adding product:', error);
+    res.status(500).json({ message: 'Error adding product', error });
+  }
+};
+
+// Fetch product by ID
+const getProductById = async (req, res) => {
+  const { productId } = req.params;
+  try {
+    const [result] = await pool.query('SELECT * FROM products WHERE product_id = ?', [productId]);
+    if (result.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const product = result[0];
+    product.image = product.image; // S3 image URL already stored
+
+    res.status(200).json({ message: 'Product fetched successfully', data: product });
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({ message: 'Error fetching product' });
+  }
+};
 
 module.exports = {
   addCategory,
