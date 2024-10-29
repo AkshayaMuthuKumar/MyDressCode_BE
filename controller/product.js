@@ -409,6 +409,43 @@ const getProductById = async (req, res) => {
   }
 };
 
+const searchProducts = async (req, res) => {
+  //Oct29
+  const { name } = req.query; // Extracting search parameters from the query
+
+  let sqlQuery = 'SELECT * FROM products WHERE 1=1'; // Base query to ensure safe query addition
+  const queryParams = [];
+
+  // Dynamically add conditions based on provided search parameters
+  if (name) {
+    sqlQuery += ' AND name LIKE ?';
+    queryParams.push(`%${name}%`); // Using LIKE for partial matching on product name
+  }
+
+  try {
+    const [results] = await pool.query(sqlQuery, queryParams);
+
+    // If no products are found, return a 404 response
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'No products found' });
+    }
+
+    // Map through results to append S3 URL to each product's image
+    const products = results.map(product => ({
+      ...product,
+      image: `https://your-s3-bucket-url/${product.image}` // S3 URL format for images
+    }));
+
+    // Return successful response with products
+    res.status(200).json({ message: 'Products fetched successfully', data: products });
+  } catch (error) {
+    console.error('Error searching for products:', error);
+    res.status(500).json({ message: 'Error searching for products' });
+  }
+};
+
+
+
 module.exports = {
   addCategory,
   getCategory,
@@ -422,5 +459,6 @@ module.exports = {
   getReviewsByProductId,
   addReview,
   getProduct,
-  getJustArrivedProducts
+  getJustArrivedProducts,
+  searchProducts
 };
