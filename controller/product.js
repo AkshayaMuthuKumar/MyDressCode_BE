@@ -429,11 +429,12 @@ const searchProducts = async (req, res) => {
     if (results.length === 0) {
       return res.status(404).json({ message: 'No products found' });
     }
+    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     // Map through results to append S3 URL to each product's image
     const products = results.map(product => ({
       ...product,
-      image: `https://your-s3-bucket-url/${product.image}` // S3 URL format for images
+      image: `baseUrl/${product.image}` // S3 URL format for images
     }));
 
     // Return successful response with products
