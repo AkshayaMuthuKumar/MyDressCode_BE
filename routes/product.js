@@ -1,6 +1,6 @@
 const express = require('express');
 const { addCategory, getCategory, addProduct, getCategoryIdBySubcategory, upload, getTopCategories, getProductById, getUniqueFilters, getProductsbySelectedCategory,getReviewsByProductId, 
-addReview,getProduct, getJustArrivedProducts } = require('../controller/product');
+addReview,getProduct, getJustArrivedProducts, searchProducts } = require('../controller/product');
 //Oct15
 
 const router = express.Router();
@@ -19,6 +19,7 @@ router.get('/getReviewsByProductId/:productId', getReviewsByProductId);
 router.post('/addReview', addReview);
 router.get('/getProduct', getProduct);
 router.get('/just-arrived', getJustArrivedProducts);
+router.get('/search', searchProducts);
 
 
 
