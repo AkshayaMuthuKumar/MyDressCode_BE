@@ -125,7 +125,7 @@ const getUserWishlist = async (req, res) => {
 
   try {
     const [wishlistItems] = await pool.query(`
-      SELECT w.*, p.image 
+      SELECT w.*, p.image
       FROM wishlist w 
       JOIN products p ON w.product_id = p.product_id 
       WHERE w.user_id = ?`,
@@ -147,21 +147,24 @@ const getUserWishlist = async (req, res) => {
 
 
 const getUserCart = async (req, res) => {
-  const userId = req.params.user_id; // Assuming 'user_id' is used in the route parameter
+  const userId = req.params.user_id;
 
   try {
     const [cartItems] = await pool.query(`
-      SELECT c.*, p.image 
-      FROM cart c 
-      JOIN products p ON c.product_id = p.product_id 
+      SELECT c.product_id AS productId, c.product_name AS name, c.quantity, c.price, p.image
+      FROM cart c
+      JOIN products p ON c.product_id = p.product_id
       WHERE c.user_id = ?`,
       [userId]
     );
 
-    // Format the image URLs properly for each cart item
+    // Ensure the response structure includes all needed fields
     const formattedCart = cartItems.map(item => ({
-      ...item,
-      image: `${req.protocol}://${req.get('host')}/${item.image.replace(/\\/g, '/')}`, // Correct the image path format
+      productId: item.productId,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      image: `${req.protocol}://${req.get('host')}/${item.image.replace(/\\/g, '/')}`
     }));
 
     res.status(200).json(formattedCart);
@@ -171,6 +174,8 @@ const getUserCart = async (req, res) => {
   }
 };
 
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 
 const toggleCartItem = async (req, res) => {
   const { productId, quantity, product_name, image, price } = req.body;
