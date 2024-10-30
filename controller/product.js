@@ -16,6 +16,9 @@ const generateProductId = async () => {
 };
 
 const path = require('path');
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
 
 // const storage = multer.diskStorage({
 //   destination: (req, file, cb) => {
@@ -34,19 +37,33 @@ const s3 = new aws.S3({
   signatureVersion: 'v4',
 });
 
-const upload = multer({
-  storage: multerS3({
-    s3: s3,
-    bucket: 'bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com',
-    acl: 'public-read', // Set the access control for the uploaded file
-    metadata: function (req, file, cb) {
-      cb(null, { fieldName: file.fieldname });
-    },
-    key: function (req, file, cb) {
-      cb(null, Date.now().toString() + path.extname(file.originalname)); // Unique file name
-    },
-  }),
-});
+const addCategory = async (req, res) => {
+  try {
+    const { category, subcategory, discount } = req.body;
+    if (!category || !subcategory) {
+      return res.status(400).json({ message: 'Category and subcategory are required' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: 'Image file is required' });
+    }
+
+    const imageBuffer = req.file.buffer; // Get image buffer
+    const categoryId = await generateCategoryId();
+    const discountValue = discount ? discount : null;
+
+    const sql = `
+      INSERT INTO categories (category_id, category, subcategory, discount, image)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    await pool.query(sql, [categoryId, category, subcategory, discountValue, imageBuffer]);
+
+    res.status(201).json({ message: 'Category added successfully', categoryId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error adding category' });
+  }
+};
+
 
 const getCategoryIdBySubcategory = async (req, res) => {
   const { subcategory } = req.query;
@@ -80,16 +97,25 @@ const getTopCategories = async (req, res) => {
       FROM products 
       GROUP BY category
     `);
-    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
-    const subcategory = rows.map(row => ({
-      name: row.category,
-      count: row.count,
-      image: baseUrl + row.image, // Construct the full URL // Image is already the S3 URL
-      category_id: row.category_id
-    }));
+    const subcategory = rows.map(row => {
+      let imageBase64;
 
-    console.log("subcategory", subcategory);
+      if (row.image && Buffer.isBuffer(row.image)) {
+        // Convert binary data to Base64
+        const base64Image = Buffer.from(row.image).toString('base64');
+        imageBase64 = `data:image/png;base64,${base64Image}`; // Adjust MIME type if necessary
+      } else {
+        imageBase64 = row.image; // Assume it's already a URL if not binary
+      }
+
+      return {
+        name: row.category,
+        count: row.count,
+        image: imageBase64, // Use the Base64 string or URL
+        category_id: row.category_id
+      };
+    });
 
     res.json({ subcategory });
   } catch (error) {
@@ -97,6 +123,7 @@ const getTopCategories = async (req, res) => {
     res.status(500).json({ message: 'Error fetching categories' });
   }
 };
+
 
 const getProductsbySelectedCategory = async (req, res) => {
   try {
@@ -113,18 +140,16 @@ const getProductsbySelectedCategory = async (req, res) => {
 
     // Querying products with or without filtering by category
     const [products] = await pool.query(query, queryParams);
-    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     // Format the image paths for each product
-    const formattedProducts = products.map(product => ({
-      
-      ...product,
-      image: baseUrl + product.image // Assuming the image is an S3 URL directly
+    const formattedProducts = products.map(product => {
+      if (product.image && Buffer.isBuffer(product.image)) {
+        const base64Image = Buffer.from(product.image).toString('base64');
+        product.image = `data:image/png;base64,${base64Image}`; // Adjust MIME type as needed
+      }
+      return product;
+    });
 
-
-    }));
-
-    // Send the filtered products with formatted image paths as a response
     res.status(200).json({
       message: 'Products fetched successfully',
       data: formattedProducts,
@@ -140,13 +165,8 @@ const getUniqueFilters = async (req, res) => {
   try {
     // Querying unique categories and their corresponding subcategories
     const [categoriesWithSubcategories] = await pool.query(`
-      SELECT 
-        category, 
-        subcategory 
-      FROM 
-        products 
-      GROUP BY 
-        category, subcategory
+      SELECT category, subcategory 
+      FROM products GROUP BY category, subcategory
     `);
 
     // Create a map to hold categories and their subcategories
@@ -207,14 +227,17 @@ const getProduct = async (req, res) => {
       ORDER BY (originalAmount - discountAmount) DESC 
       LIMIT 6
     `);
-    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
     // Format the image URLs similar to how it's done in getTopCategories
     const formatProductImages = (products) => {
-      return products.map(product => ({
-        ...product,
-        image: baseUrl + product.image // Use the S3 URL directly
-      }));
+      return products.map(product => {
+        // Check if the image is stored as binary data
+        if (product.image && Buffer.isBuffer(product.image)) {
+          const base64Image = Buffer.from(product.image).toString('base64');
+          product.image = `data:image/png;base64,${base64Image}`; // Adjust MIME type as needed
+        }
+        return product;
+      });
     };
 
     // Format the images for both recent and discounted products
@@ -313,33 +336,6 @@ const getJustArrivedProducts = async (req, res) => {
   }
 };
 
-const addCategory = async (req, res) => {
-  try {
-    const { category, subcategory, discount } = req.body;
-    if (!category || !subcategory) {
-      return res.status(400).json({ message: 'Category and subcategory are required' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ message: 'Image file is required' });
-    }
-
-    const image = req.file.location; // S3 image URL
-    const categoryId = await generateCategoryId();
-    const discountValue = discount ? discount : null;
-    
-    const sql = `
-      INSERT INTO categories (category_id, category, subcategory, discount, image)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    await pool.query(sql, [categoryId, category, subcategory, discountValue, image]);
-
-    res.status(201).json({ message: 'Category added successfully', categoryId });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error adding category' });
-  }
-};
-
 // Get distinct categories and subcategories
 const getCategory = async (req, res) => {
   try {
@@ -364,10 +360,11 @@ const addProduct = async (req, res) => {
     return res.status(400).json({ message: 'Image file is required' });
   }
 
-  const image = req.file.location; // S3 image URL
+  const imageBuffer = req.file.buffer; // Get image buffer for direct storage
   const productId = await generateProductId();
 
   try {
+    // Validate the categoryId
     const [categoryRow] = await pool.query('SELECT category FROM categories WHERE category_id = ?', [categoryId]);
     if (categoryRow.length === 0) {
       return res.status(404).json({ message: 'Category not found' });
@@ -375,12 +372,14 @@ const addProduct = async (req, res) => {
 
     const categoryName = categoryRow[0].category;
 
+    // SQL query to insert a product with image binary data
     const sql = `
       INSERT INTO products (category_id, product_id, category, name, subcategory, size, brand, image, originalAmount, discountAmount, stock, description)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     await pool.query(sql, [
-      categoryId, productId, categoryName, name, subcategory, size, brand, image, originalAmount, discountAmount ? discountAmount : null, stock, description
+      categoryId, productId, categoryName, name, subcategory, size, brand, imageBuffer, originalAmount,
+      discountAmount ? discountAmount : null, stock, description
     ]);
 
     res.status(201).json({ message: 'Product added successfully!', productId });
@@ -389,6 +388,7 @@ const addProduct = async (req, res) => {
     res.status(500).json({ message: 'Error adding product', error });
   }
 };
+
 
 // Fetch product by ID
 const getProductById = async (req, res) => {
@@ -400,8 +400,10 @@ const getProductById = async (req, res) => {
     }
 
     const product = result[0];
-    product.image = product.image; // S3 image URL already stored
-
+    if (product.image && Buffer.isBuffer(product.image)) {
+      const base64Image = Buffer.from(product.image).toString('base64');
+      product.image = `data:image/png;base64,${base64Image}`; // Adjust MIME type as needed
+    }
     res.status(200).json({ message: 'Product fetched successfully', data: product });
   } catch (error) {
     console.error('Error fetching product:', error);
@@ -429,13 +431,15 @@ const searchProducts = async (req, res) => {
     if (results.length === 0) {
       return res.status(404).json({ message: 'No products found' });
     }
-    const baseUrl = 'https://bucket-730c4e6d-4708-47c9-9c55-bac3c7c4a190-fsbucket.services.clever-cloud.com/';
 
-    // Map through results to append S3 URL to each product's image
-    const products = results.map(product => ({
-      ...product,
-      image: `baseUrl/${product.image}` // S3 URL format for images
-    }));
+    const products = results.map(product => {
+      // Convert buffer to Base64 string if image data is in buffer format
+      const base64Image = Buffer.from(product.image).toString('base64');
+      return {
+        ...product,
+        image: `data:image/png;base64,${base64Image}`, // Embeds image in Base64 format
+      };
+    });
 
     // Return successful response with products
     res.status(200).json({ message: 'Products fetched successfully', data: products });
