@@ -121,22 +121,33 @@ const getCurrentUser = async (req, res) => {
 };
 
 const getUserWishlist = async (req, res) => {
-  const userId = req.params.user_id; // Assuming 'user_id' is used in the route parameter
+  const userId = req.params.user_id;
 
   try {
     const [wishlistItems] = await pool.query(`
-      SELECT w.*, p.image
+      SELECT w.product_id, w.product_name, w.price, p.image
       FROM wishlist w 
       JOIN products p ON w.product_id = p.product_id 
       WHERE w.user_id = ?`,
       [userId]
     );
 
-    // Format the image URLs properly for each wishlist item
-    const formattedWishlist = wishlistItems.map(item => ({
-      ...item,
-      image: `${req.protocol}://${req.get('host')}/${item.image.replace(/\\/g, '/')}`, // Correct the image path format
-    }));
+    const formattedWishlist = wishlistItems.map(item => {
+      let imageBase64;
+      
+      if (Buffer.isBuffer(item.image)) {
+        // Convert binary data to Base64
+        const base64Image = Buffer.from(item.image).toString('base64');
+        imageBase64 = `data:image/png;base64,${base64Image}`; // Adjust MIME type if needed
+      } else {
+        imageBase64 = item.image;
+      }
+
+      return {
+        ...item,
+        image: imageBase64
+      };
+    });
 
     res.status(200).json(formattedWishlist);
   } catch (error) {
@@ -144,7 +155,6 @@ const getUserWishlist = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-
 
 const getUserCart = async (req, res) => {
   const userId = req.params.user_id;
@@ -158,14 +168,25 @@ const getUserCart = async (req, res) => {
       [userId]
     );
 
-    // Ensure the response structure includes all needed fields
-    const formattedCart = cartItems.map(item => ({
-      productId: item.productId,
-      name: item.name,
-      quantity: item.quantity,
-      price: item.price,
-      image: `${req.protocol}://${req.get('host')}/${item.image.replace(/\\/g, '/')}`
-    }));
+    const formattedCart = cartItems.map(item => {
+      let imageBase64;
+
+      if (Buffer.isBuffer(item.image)) {
+        // Convert binary data to Base64
+        const base64Image = Buffer.from(item.image).toString('base64');
+        imageBase64 = `data:image/png;base64,${base64Image}`; // Adjust MIME type if necessary
+      } else {
+        imageBase64 = item.image;
+      }
+
+      return {
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        image: imageBase64
+      };
+    });
 
     res.status(200).json(formattedCart);
   } catch (error) {
@@ -175,11 +196,11 @@ const getUserCart = async (req, res) => {
 };
 
 
+
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 
 const toggleCartItem = async (req, res) => {
   const { productId, quantity, product_name, image, price } = req.body;
-  console.log("price", price)
   const userId = req.params.user_id;
 
   if (!userId || !productId) {
@@ -189,21 +210,19 @@ const toggleCartItem = async (req, res) => {
   try {
     const [existingItem] = await pool.query('SELECT * FROM cart WHERE user_id = ? AND product_id = ?', [userId, productId]);
 
-    // If the item exists in the cart, remove it and return grey color
     if (existingItem.length > 0) {
       await pool.query('DELETE FROM cart WHERE user_id = ? AND product_id = ?', [userId, productId]);
       return res.status(200).json({
         message: 'Item removed from cart',
         isAdded: false,
-        buttonColor: '#6c757d', // grey
+        buttonColor: '#6c757d',
         cartItem: {
           id: productId,
           name: product_name,
           quantity: quantity,
-          price: price, // Ensure you send the price
-          image: image
+          price: price,
+          image: image ? `data:image/png;base64,${Buffer.from(image).toString('base64')}` : null
         }
-
       });
     }
 
@@ -217,8 +236,8 @@ const toggleCartItem = async (req, res) => {
         id: productId,
         name: product_name,
         quantity: quantity,
-        price: price, // Ensure you send the price
-        image: image
+        price: price,
+        image: image ? `data:image/png;base64,${Buffer.from(image).toString('base64')}` : null
       }
     });
   } catch (error) {
@@ -227,9 +246,9 @@ const toggleCartItem = async (req, res) => {
   }
 };
 
+
 const toggleWishlistItem = async (req, res) => {
   const { productId, product_name, image, price } = req.body;
-  console.log("req.body", req.body)
   const userId = req.params.user_id;
 
   if (!userId || !productId) {
@@ -239,25 +258,21 @@ const toggleWishlistItem = async (req, res) => {
   try {
     const [existingItem] = await pool.query('SELECT * FROM wishlist WHERE user_id = ? AND product_id = ?', [userId, productId]);
 
-    // If the item exists in the cart, remove it and return grey color
     if (existingItem.length > 0) {
       await pool.query('DELETE FROM wishlist WHERE user_id = ? AND product_id = ?', [userId, productId]);
       return res.status(200).json({
         message: 'Item removed from wishlist',
         isAdded: false,
-        buttonColor: '#6c757d', // grey
+        buttonColor: '#6c757d',
         wishlistItem: {
           id: productId,
           product_name: product_name,
-          image: `${req.protocol}://${req.get('host')}/${image.replace(/\\/g, '/')}`, // Correct the image path format
-
-          price: price, // Ensure you send the price
+          image: image ? `data:image/png;base64,${Buffer.from(image).toString('base64')}` : null,
+          price: price
         }
-
       });
     }
 
-    // If item is not in the cart, add it and return red color
     await pool.query('INSERT INTO wishlist (user_id, product_id, product_name, image, price) VALUES (?, ?, ?, ?, ?)', [userId, productId, product_name, image, price]);
 
     return res.status(201).json({
@@ -267,9 +282,8 @@ const toggleWishlistItem = async (req, res) => {
       wishlistItem: {
         id: productId,
         product_name: product_name,
-        image: image,
-        price: price, // Ensure you send the price
-
+        image: image ? `data:image/png;base64,${Buffer.from(image).toString('base64')}` : null,
+        price: price
       }
     });
   } catch (error) {
@@ -277,6 +291,7 @@ const toggleWishlistItem = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 module.exports = {
   signupUser,
