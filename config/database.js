@@ -10,10 +10,10 @@ const mysql = require('mysql2/promise');
 // });
 
 const db = mysql.createPool({
-  host: 'bjitio8jkqvxjg22yx2o-mysql.services.clever-cloud.com',
-  user: 'uen6fxfvuac2fdee',
-  password: 'mn0x5pBMruBSglUK2KG5', // Replace with your MySQL password
-  database: 'bjitio8jkqvxjg22yx2o',
+  host: 'btaybe45iagpa7qkmc2o-mysql.services.clever-cloud.com',
+  user: 'un7tjqumyfepboei',
+  password: 'eIxlaWERZNbLaZfMlAmI', // Replace with your MySQL password
+  database: 'btaybe45iagpa7qkmc2o',
   waitForConnections: true,
 });
 
