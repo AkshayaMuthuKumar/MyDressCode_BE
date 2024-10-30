@@ -38,7 +38,7 @@ const categoriesTable = `
     category VARCHAR(255) NOT NULL,
     subcategory VARCHAR(255) NOT NULL,
     discount DECIMAL(5, 2) DEFAULT NULL,
-    image VARCHAR(255),
+    image LONGBLOB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`;
 
@@ -52,7 +52,7 @@ const productTable = `
     subcategory VARCHAR(255) NOT NULL,
     size VARCHAR(50) NOT NULL,
     brand VARCHAR(100) NOT NULL,
-    image VARCHAR(255),
+    image LONGBLOB,
     originalAmount DECIMAL(10, 2),
     discountAmount DECIMAL(10, 2),
     stock INT,
@@ -82,7 +82,7 @@ CREATE TABLE wishlist (
     user_id VARCHAR(255) NOT NULL,
     product_id VARCHAR(255) NOT NULL,
     product_name VARCHAR(255) NOT NULL,
-    image VARCHAR(255),
+    image LONGBLOB,
     price DECIMAL(10, 2),
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     UNIQUE (user_id, product_id)
@@ -94,13 +94,12 @@ CREATE TABLE cart (
     user_id VARCHAR(255) NOT NULL,
     product_id VARCHAR(255) NOT NULL,
     product_name VARCHAR(255) NOT NULL,
-    image VARCHAR(255),
+    image LONGBLOB,
     quantity INT DEFAULT 1,
     price DECIMAL(10, 2),
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     UNIQUE (user_id, product_id)
-);
-`
+);`
 
 const createTables = async () => {
   const tableQueries = [
