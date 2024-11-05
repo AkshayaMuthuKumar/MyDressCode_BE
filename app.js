@@ -8,7 +8,7 @@ const bodyParser = require('body-parser');
 const productRoutes = require('./routes/product');
 const loginRoutes = require('./routes/user');
 const { getCurrentUser } = require('./controller/user');
-app.use(bodyParser.json({ limit: '10mb' })); // Adjust the size as needed
+app.use(bodyParser.json({ limit: '100mb' })); // Adjust the size as needed
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' })); //
 
 
